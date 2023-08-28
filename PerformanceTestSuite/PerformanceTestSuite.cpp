@@ -7,20 +7,25 @@
 
 /*
 command line format:
-	PerformanceTestSuite.exe [--iterations N | -i N] --commands <cmd_1> <cmd_2> <cmd_N> --wdirectories <wdir_1> <wdir_2> <wdir_N> --args "<args_1>" "<args_2>" "<args_N>"
+	PerformanceTestSuite.exe [--iterations N] --commands <cmd_1> <cmd_2> <cmd_N> --wdirectories <wdir_1> <wdir_2> <wdir_N> --args <args_1> && <args_2> && <args_N>
 
 command line options:
 	--iterations N      number of times to run commands
 	--commands          list of commands to execute, these can be absolute paths to .exe files or cmd line commands to execute
 	--wdirectories      list of working directories from which to execute commands. Working Directories indices are the same as Command Indices.
 							Current Working directory can be selected as ".", there must be as many working directories as commands
-	--args				command line arguments to pass to the respective commands. No command line arguments is selected as '.'
-	-i N                number of times to run commands
+	--args				command line arguments to pass to the respective commands. No command line arguments is selected as '.'. Arguments must be between ''
+
+example:
+	PerformanceTestSuite.exe --iterations 10 --commands StringSearcher.exe findstr --wdirectories C:\Users\rhidi\Documents\ C:\Users\rhidi\Documents\ --args -r Hello_World! *.txt && /s Hello_World! *.txt
 */
 
 #ifdef _DEBUG
-#define ASSERT(expr) if (!(expr)) std::cout << "Assertion triggered: " << #expr << " at line " << __LINE__ << " in file " << __FILE__ << "\n"; \
-						__debugbreak();
+#define ASSERT(expr)	if (!(expr))	\
+						{	\
+							std::cout << "Assertion triggered: " << #expr << " at line " << __LINE__ << " in file " << __FILE__ << "\n";	\
+							__debugbreak();	\
+						}
 #else
 #define ASSERT(expr)
 #endif
@@ -37,7 +42,6 @@ namespace
 		std::cout << "--commands			list of commands to execute, these can be absolute paths to .exe files or cmd line commands to execute\n";
 		std::cout << "--wdirectories		list of working directories from which to execute commands. Working Directories indices are the same as Command Indices. Current Working directory can be selected as '.', there must be as many working directories as commands\n";
 		std::cout << "--args				command line arguments to pass to the respective commands. No command line arguments is selected as '.'\n";
-		std::cout << "-i					number of times to run commands\n";
 
 		std::cout << "Example: PerformanceTestSuite.exe -i 10 --commands D:\\Hello_World.exe findstr\n";
 	}
@@ -58,7 +62,7 @@ namespace
 		{
 			const std::string CurrentArg{ Argv[i] };
 
-			if (CurrentArg == "--iterations" || CurrentArg == "-i")
+			if (CurrentArg == "--iterations")
 			{
 				if (!IsArgDigit(Argv[++i]))
 				{
@@ -70,13 +74,17 @@ namespace
 			else if (CurrentArg == "--commands")
 			{
 				std::string Arg{ Argv[++i] };
-				while (!Arg.starts_with("-"))
+				while (!Arg.starts_with("--"))
 				{
 					Commands.push_back(Arg);
 
 					if (i < Argc - 1)
 					{
 						Arg = Argv[++i];
+					}
+					else
+					{
+						break;
 					}
 				}
 
@@ -85,13 +93,17 @@ namespace
 			else if (CurrentArg == "--wdirectories")
 			{
 				std::string Arg{ Argv[++i] };
-				while (!Arg.starts_with("-"))
+				while (!Arg.starts_with("--"))
 				{
 					WorkingDirectories.push_back(Arg);
 
 					if (i < Argc - 1)
 					{
 						Arg = Argv[++i];
+					}
+					else
+					{
+						break;
 					}
 				}
 
@@ -100,13 +112,31 @@ namespace
 			else if (CurrentArg == "--args")
 			{
 				std::string Arg{ Argv[++i] };
-				while (Arg.starts_with("\""))
+				std::string CommandArg{};
+				while (!Arg.starts_with("--"))
 				{
-					CommandArgs.push_back(Arg.substr(1, Arg.find_last_of('"')));
+					if (Arg != "&&")
+					{
+						CommandArg += Arg + " ";
+					}
+					else
+					{
+						CommandArgs.push_back(CommandArg);
+						CommandArg = "";
+					}
 
 					if (i < Argc - 1)
 					{
 						Arg = Argv[++i];
+					}
+					else
+					{
+						if (CommandArg != "")
+						{
+							CommandArgs.push_back(CommandArg);
+						}
+
+						break;
 					}
 				}
 
@@ -188,7 +218,7 @@ int RunCmdLine(int Argc, char* Argv[])
 	{
 		for (size_t j{}; j < Commands.size(); ++j)
 		{
-			std::string Command{ "cd " + WorkingDirectories[j] + " " + Commands[j] };
+			std::string Command{ "cd " + WorkingDirectories[j] + " && " + Commands[j] };
 			if (j < CommandArgs.size() && CommandArgs[j] != ".")
 			{
 				Command += " " + CommandArgs[j];
@@ -217,7 +247,7 @@ int RunCmdLine(int Argc, char* Argv[])
 		v.erase(v.begin() + v.size() - nrOfElementsToRemove, v.end());
 	}
 
-	std::cout << "\n\nNr Of Iterations: " << Iterations << "\n";
+	std::cout << "Nr Of Iterations: " << Iterations << "\n";
 
 	for (size_t i{}; i < Commands.size(); ++i)
 	{
