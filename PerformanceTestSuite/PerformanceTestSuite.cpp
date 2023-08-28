@@ -1,3 +1,6 @@
+#include "Timer.h"
+
+#include <algorithm>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -14,6 +17,13 @@ command line options:
 	--args				command line arguments to pass to the respective commands. No command line arguments is selected as '.'
 	-i N                number of times to run commands
 */
+
+#ifdef _DEBUG
+#define ASSERT(expr) if (!(expr)) std::cout << "Assertion triggered: " << #expr << " at line " << __LINE__ << " in file " << __FILE__ << "\n"; \
+						__debugbreak();
+#else
+#define ASSERT(expr)
+#endif
 
 namespace
 {
@@ -41,7 +51,6 @@ namespace
 
 		return true;
 	}
-
 
 	static int ParseCmdLine(int Argc, char* Argv[], int& Iterations, std::vector<std::string>& Commands, std::vector<std::string>& WorkingDirectories, std::vector<std::string>& CommandArgs)
 	{
@@ -107,6 +116,35 @@ namespace
 
 		return 0;
 	}
+
+	template<typename T>
+	constexpr static T GetAverage(const std::vector<T>& v)
+	{
+		T average{};
+
+		for (const T value : v)
+		{
+			average += value;
+		}
+
+		return average / static_cast<T>(v.size());
+	}
+
+	template<typename T>
+	constexpr static T GetMedian(const std::vector<T>& v)
+	{
+		const T size{ static_cast<T>(v.size()) };
+		const T medianIndex{ (size + 1) / 2 };
+
+		if (size % 2 == 0)
+		{
+			return (v[medianIndex] + v[medianIndex + 1]) / 2;
+		}
+		else
+		{
+			return v[medianIndex];
+		}
+	}
 }
 
 int RunCmdLine(int Argc, char* Argv[]);
@@ -135,6 +173,60 @@ int RunCmdLine(int Argc, char* Argv[])
 		std::cout << "Wrong usage of arguments\n";
 		PrintHelp();
 		return 1;
+	}
+
+	ASSERT(Commands.size() == WorkingDirectories.size());
+	using namespace Time;
+
+	std::vector<std::vector<uint32_t>> Times{};
+	for (size_t i{}; i < Commands.size(); ++i)
+	{
+		Times.push_back(std::vector<uint32_t>{});
+	}
+
+	for (int i{}; i < Iterations; ++i)
+	{
+		for (size_t j{}; j < Commands.size(); ++j)
+		{
+			std::string Command{ "cd " + WorkingDirectories[j] + " " + Commands[j] };
+			if (j < CommandArgs.size() && CommandArgs[j] != ".")
+			{
+				Command += " " + CommandArgs[j];
+			}
+
+			Command += " > nul";
+
+			const Timepoint t1{ Timer::GetInstance().Now() };
+			system(Command.c_str());
+			const Timepoint t2{ Timer::GetInstance().Now() };
+
+			Times[j].push_back((t2 - t1).Count<TimeLength::MilliSeconds, uint32_t>());
+		}
+	}
+
+	int nrOfElementsToRemove{ Iterations / 10 / 2 };
+	if (nrOfElementsToRemove == 0)
+	{
+		nrOfElementsToRemove = 1;
+	}
+
+	for (std::vector<uint32_t>& v : Times)
+	{
+		std::sort(v.begin(), v.end());
+		v.erase(v.begin(), v.begin() + nrOfElementsToRemove);
+		v.erase(v.begin() + v.size() - nrOfElementsToRemove, v.end());
+	}
+
+	std::cout << "\n\nNr Of Iterations: " << Iterations << "\n";
+
+	for (size_t i{}; i < Commands.size(); ++i)
+	{
+		std::cout << Commands[i] << " Times:\n\n";
+
+		std::cout << "Average (ms): " << GetAverage(Times[i]) << "\n";
+		std::cout << "Median (ms): " << GetMedian(Times[i]) << "\n";
+
+		std::cout << "\n========================\n";
 	}
 
 	return 0;
